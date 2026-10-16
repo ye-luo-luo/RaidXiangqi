@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="突袭匈汉象棋 —— 融合中国象棋、国际象棋元素与独特「突袭/夹击」机制的棋类变体。手机、电脑皆可玩。">
+  <title>突袭匈汉象棋</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>突袭匈汉象棋 <span class="ver" id="ver-label"></span></h1>
+      <div id="status"></div>
+    </header>
+
+    <main id="main">
+      <div id="boardwrap">
+        <div id="board" role="grid" aria-label="棋盘"></div>
+        <div id="river-label">汉界 · 匈界</div>
+      </div>
+    </main>
+
+    <footer>
+      <div id="controls">
+        <button id="btn-new">新局</button>
+        <button id="btn-undo">悔棋</button>
+        <button id="btn-flip">翻转</button>
+        <button id="btn-replay">回放</button>
+        <button id="btn-net">🌐 联机</button>
+        <button id="btn-resign" disabled title="认输（当前方认负）">认输</button>
+        <button id="btn-draw" disabled title="和棋认定（联机中开局20步后向对方求和）">求和</button>
+        <button id="btn-rules">规则</button>
+        <label class="toggle" title="开启后由电脑执一方的棋">
+          <input type="checkbox" id="ai-toggle"> 人机对战
+        </label>
+        <label class="toggle" id="ai-side-wrap" title="勾选后电脑执红（汉）先行">
+          <input type="checkbox" id="ai-side"> AI 执红
+        </label>
+      </div>
+      <div id="replay-bar" hidden>
+        <div class="rp-controls">
+          <button class="btn small" id="rp-play" title="播放/暂停">▶</button>
+          <button class="btn small" id="rp-slower" title="放慢">⏪ 慢</button>
+          <span id="rp-speed">1.0 秒/步</span>
+          <button class="btn small" id="rp-faster" title="加快">快 ⏩</button>
+          <button class="btn small" id="rp-exit" title="退出回放">✕ 退出</button>
+        </div>
+        <div class="rp-progress">
+          <input type="range" id="rp-progress" min="0" max="0" value="0" step="1" aria-label="回放进度">
+          <span id="rp-step">0 / 0</span>
+        </div>
+      </div>
+      <div id="movebar"></div>
+    </footer>
+  </div>
+
+  <!-- 结算弹窗 -->
+  <div class="modal-mask" id="result-modal" hidden>
+    <div class="modal result-modal">
+      <button class="modal-x" id="result-close" title="关闭" aria-label="关闭">×</button>
+      <h2 id="result-title">🏁 对局结束</h2>
+      <p id="result-text"></p>
+      <div class="result-btns">
+        <button class="btn" id="result-restart">🔄 重新开始</button>
+        <button class="btn" id="result-replay">▶ 回放本局</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 联机弹窗 -->
+  <div class="modal-mask" id="net-modal" hidden>
+    <div class="modal net-modal">
+      <button class="modal-x" id="net-close" title="关闭" aria-label="关闭">×</button>
+      <h2 class="net-title">🌐 联机对战</h2>
+      <div class="net-tabs" id="net-tabs">
+        <button class="tab active" id="tab-peer" type="button">互联网联机</button>
+        <button class="tab" id="tab-relay" type="button">局域网联机</button>
+      </div>
+      <div class="net-body" id="net-body">
+        <div class="net-panel" id="panel-peer">
+          <p>无需服务器，通过公共中继点对点直连（<b>需联网</b>，跨网络可用）。<br>
+          若公共中继不可用，可自建信令服务器（<code>npx peerjs --port 9000</code>）并填在下方。</p>
+          <div class="net-row">
+            <input id="net-peer-server" placeholder="信令服务器：留空用公共云，或填 主机:端口" autocomplete="off">
+          </div>
+          <div class="net-row">
+            <button class="btn" id="net-create-peer">创建联机码</button>
+          </div>
+          <div class="net-row">
+            <input id="net-code-input-peer" placeholder="输入对方的联机码" maxlength="8" autocomplete="off">
+            <button class="btn" id="net-join-peer">加入</button>
+          </div>
+        </div>
+        <div class="net-panel" id="panel-relay" hidden>
+          <p>在电脑上运行 <code>node server.js</code>，两台设备打开<b>同一地址</b>即可联机（同一 Wi-Fi 可玩，无需外网）。</p>
+          <div class="net-row">
+            <input id="net-relay-url" placeholder="服务器地址（留空自动检测）" autocomplete="off">
+            <button class="btn" id="net-create-relay">创建联机码</button>
+          </div>
+          <div class="net-row">
+            <input id="net-code-input-relay" placeholder="输入联机码" maxlength="8" autocomplete="off">
+            <button class="btn" id="net-join-relay">加入</button>
+          </div>
+        </div>
+        <div class="net-code" id="net-code-wrap" hidden>
+          <span class="net-code-label">你的联机码</span>
+          <div class="net-code-big" id="net-code">------</div>
+          <button class="btn small" id="net-copy">📋 复制联机码</button>
+          <div class="net-wait" id="net-wait">等待对方加入…</div>
+        </div>
+        <div class="net-connected" id="net-connected" hidden>
+          <b>已连接 ✓</b> <span id="net-my-side">执子分配中…</span>
+          <div id="net-match-info" class="net-match-info"></div>
+          <div id="net-lobby" class="net-lobby" hidden>
+            <div class="net-sel">
+              <span class="net-opt-label">我执：</span>
+              <label class="radio"><input type="radio" name="net-sel-side" value="han" checked> 汉（红）</label>
+              <label class="radio"><input type="radio" name="net-sel-side" value="hun"> 匈（黑）</label>
+              <span id="net-sel-op" class="net-sel-op"></span>
+            </div>
+            <div class="net-sel">
+              <span class="net-opt-label">赛制（房主）：</span>
+              <select id="net-sel-format">
+                <option value="one">一锤定音（平局加赛）</option>
+                <option value="bo3" selected>事不过三（三局两胜，平局加赛）</option>
+              </select>
+            </div>
+            <span id="net-lobby-status" class="net-lobby-status"></span>
+            <span class="net-lobby-btns">
+              <button class="btn small" id="net-ready" hidden>🟢 准备</button>
+              <button class="btn small" id="net-start" hidden disabled>▶ 开始对局</button>
+            </span>
+            <span id="net-ping" class="net-ping">延时：--</span>
+          </div>
+          <button class="btn small" id="net-disconnect">✕ 断开</button>
+        </div>
+        <div id="net-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 悔棋申请弹窗 -->
+  <div class="modal-mask" id="undo-modal" hidden>
+    <div class="modal small-modal">
+      <h2>🙋 悔棋申请</h2>
+      <p id="undo-req-text">对方请求悔棋一步，是否同意？</p>
+      <p class="net-wait">同意后对方悔一步，<b>你将获得一次「免同意悔棋」机会</b>。</p>
+      <div class="result-btns">
+        <button class="btn" id="undo-yes">✓ 同意</button>
+        <button class="btn" id="undo-no">✕ 拒绝</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 和棋认定弹窗（议和） -->
+  <div class="modal-mask" id="offer-modal" hidden>
+    <div class="modal small-modal">
+      <h2>🤝 和棋认定</h2>
+      <p id="offer-req-text">对方提出和棋认定，是否同意？（同意即和棋，加赛一局）</p>
+      <div class="result-btns">
+        <button class="btn" id="offer-yes">✓ 同意和棋</button>
+        <button class="btn" id="offer-no">✕ 拒绝</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 规则弹窗 -->
+  <div class="modal-mask" id="rules-modal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2>📜 突袭匈汉象棋 · 规则</h2>
+        <button class="btn" id="rules-close">关闭</button>
+      </div>
+      <div class="modal-body">
+        <p>一种融合中国象棋、国际象棋元素及独特「突袭」机制的棋类变体。数据来源：<code>结构.json</code>。</p>
+
+        <h3>棋盘与阵营</h3>
+        <p>11×12 棋盘，坐标原点左下角：x 0–10、y 0–11。河界位于 y=5 与 y=6 之间；九宫（米字格）在下方 (4,1)–(6,3)，上方与之对称。<br>
+        汉军（<span class="piece-sample han">汉</span> 红）居下先行；匈军（<span class="piece-sample hun">匈</span> 黑）居上。匈方棋子与汉方对应异名：兵→卒、炮→砲、相→都、士→氏、皇→单、檑→礌，其余（車馬突袭）同名。</p>
+
+        <h3>传统棋子（走法同中国象棋）</h3>
+        <p>▸ <b>車</b> 横竖走任意格；<b>馬</b> 走“日”字、蹩马腿；<b>相</b> 走“田”字、塞象眼、不过河。<br>
+        ▸ <b>士</b> 九宫内斜走一步；<b>皇（帅）</b> 九宫内横竖走一步，两王同列不得照面（飞将）。<br>
+        ▸ <b>炮</b> 走子如車，吃子须隔一个“炮架”；<b>兵</b> 每步前进一步，过河后可横走，永不后退。</p>
+
+        <h3>檑 / 礌（猛冲战车）</h3>
+        <p>沿八个方向任意空格移动（似皇后，不可越子）。<br>
+        吃子：只能吃<b>紧邻八格内“落单”的敌子</b>——以判定的檑为中心，其周围 8 格（3×3）内该敌子没有任何相邻棋子（任意己方/敌方棋子都算，判定的檑自身除外）；8 格之外的棋子不影响判定。</p>
+
+        <h3>突 / 袭 与「突袭·夹击」机制</h3>
+        <p><b>突</b> 走<b>斜线</b>，<b>袭</b> 走<b>直线</b>；二者都可越过己方棋子、不可越过敌方棋子，不能落点吃子。<br>
+        它们靠“夹击”吃子：<br>
+        ▸ <b>直夹（突）</b>：己-敌-己 处于<b>同行或同列</b>，翼子与被夹击敌子<b>紧邻一格（中间无空格）</b>。<br>
+        ▸ <b>斜夹（袭）</b>：己-敌-己 处于<b>同斜线</b>，翼子与被夹击敌子<b>紧邻一格（中间无空格）</b>。<br>
+        夹击形成的<b>当回合不能吃</b>，自下一回合起可「突袭」：该棋子移动到被吃子的位置将其吃掉（橙⭕闪烁为可突袭目标）。<br>
+        被夹击的敌子（格上显示 ⚡）仍可<b>自由移动</b>（不存在钳制/定身），只是面临被“突袭”吃掉的风险。</p>
+
+        <h3>胜负与和棋</h3>
+        <p>将死对方，或直接吃掉对方王（皇/单）即获胜；困毙（无子可动）或三次重复局面判和。</p>
+
+        <h3>操作</h3>
+        <p>点击/点按本方棋子 → 高亮可走点（绿点=移动，红圈=吃子，橙闪圈=突袭）→ 点击落子。<br>
+        支持：双人对战 / 人机对战、悔棋(U)、翻转棋盘(F，180° 旋转、棋子镜像)、新局(N)。黄底高亮为最近一步。<br>
+        <b>认输 / 求和</b>：认输（当前方认负）在<b>开局 10 步之后</b>解锁；联机中「求和」（和棋认定）在<b>开局 20 步之后</b>解锁。<br>
+        <b>联机</b>：连接建立后在大厅里选择执红/执黑与赛制，双方选择实时同步（一方改动另一方立即刷新）；执子一致首次随机分配、之后复用上次结果；<b>赛制由房主选择</b>（一锤定音 / 事不过三，三局两胜平局加赛），加入方仅可查看。加入方选定执子后点「准备」，房主点「开始对局」。多局赛制中相邻两局执棋相反（先手互换）。大厅实时显示网络<b>延时</b>（ping），并<b>时刻检测对方是否脱机</b>（长时间无响应自动断开）；联机中仍可打开联机界面，随时<b>断开</b>连接。<br>
+        <b>联机悔棋</b>：一步 = 一个着法；悔棋时若对方悔棋次数 ≤ 自己，需对方同意，对方同意后你将获得一次「免同意悔棋」机会（对方悔得比你多时可直接悔）。<br>
+        <b>互联网联机的两种通道</b>：默认走 PeerJS 公共信令云（<b>需联网</b>）；若公共中继不可达，可在「互联网联机」里填写自建信令服务器（<code>npx peerjs --port 9000</code> 后填 <code>主机:端口</code>），或直接改用<b>局域网联机</b>（本机 <code>node server.js</code>，不依赖外网）。联机码只在<b>成功连上信令服务器后</b>才显示，连不上会给出明确原因。<br>
+        比分格式：<b>红X：平Y：黑Z</b>，中间为平局数。</p>
+
+        <p class="note">🎯 <b>演示版实现约定</b>：① 被夹击敌子不受钳制、可自由移动（原规则未明说“能否逃脱”，本版按可移动实现）；② 夹击要求翼子紧邻（中间无空格）；③ 胜负采用中国象棋式“将/将死”+ 吃王即胜；④ 夹击完成回合以“下一步才能吃”落地。详见 README.md。</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/logic.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
